@@ -5,15 +5,12 @@ import FilterCampaign from '@/components/shared/FilterCampaign';
 import { abi, allChainAddress } from '@/constants/contract';
 import useMetamask from '@/hooks/useMetamask';
 import { shortenAddress } from '@/utils';
-import { PushAPI } from '@pushprotocol/restapi';
-import Constants from '@pushprotocol/restapi/src/lib/constants';
 import { Flex, Select, Switch, Text, TextArea, TextField } from '@radix-ui/themes';
 import { ethers } from 'ethers';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-
 
 const PageLayout = dynamic(
   () => import('@/components/UI/PageLayout'), {
@@ -28,7 +25,7 @@ const Create = () => {
   const [message, setMessage] = useState<string>('');
   const [rewardPerWallet, setRewardPerWallet] = useState<string>('');
   const [capacity, setCapacity] = useState<string>('');
-  const [mesageProvider, setMessageProvider] = useState<string>('');
+  const [mesageProvider, setMessageProvider] = useState<string>('xmtp');
 
   const [dataLoading, setDataLoading] = useState<boolean>(false);
   const [apiResponse, setApiResponse] = useState<any>(null);
@@ -42,29 +39,25 @@ const Create = () => {
     provider,
     disconnect,
     account,
-    connected, chainId
+    connected, 
+    chainId
   } = useMetamask();
-
-
 
   const run = async () => {
     setLoading(true);
     try {
-      if (mesageProvider == "push") {
-        await sendPushNotification();
-      }
-      else {
-        await sendXMTPMessage();
-      }
+      // Always use XMTP (Push Protocol temporarily disabled due to compatibility issues)
+      console.log('Sending notifications via XMTP...');
+      await sendXMTPMessage();
 
       toast('Campaign created successfully! Ads sent out to the audience.');
 
-
       const chainId = 11155111
-      const provider = new ethers.providers.Web3Provider((window as any).ethereum, 'any');
+      const provider = new ethers.WebSocketProvider((window as any).ethereum, 'any');
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(allChainAddress, abi, signer)
       const value = Number(capacity) * Number(rewardPerWallet)
+      
       const create = await contract.createAirdrop(
         campaignName,
         // number of people who can get
@@ -76,7 +69,7 @@ const Create = () => {
         // verification
         "1inch_verification",
         {
-          value: ethers.utils.parseEther(value.toString())
+          value: ethers.parseEther(value.toString())
         }
       )
       console.log(create)
@@ -87,11 +80,10 @@ const Create = () => {
       console.error("__________&&&&&&&&***___")
       console.error(err)
       console.error("__________&&&&&&&&***___")
+      toast.error('Failed to create campaign. Please check console for details.')
     }
     setLoading(false);
   }
-
-
 
   useEffect(() => {
     (async function handler() {
@@ -124,40 +116,18 @@ const Create = () => {
 Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`,
         }),
       });
+      
+      if (response.ok) {
+        console.log('XMTP messages sent successfully');
+      } else {
+        console.error('XMTP message sending failed');
+      }
     }
     catch (e) {
-      console.log(e)
+      console.error('XMTP Error:', e)
+      toast.error('Failed to send XMTP messages')
     }
   }
-
-
-  const sendPushNotification = async () => {
-
-    const provider = new ethers.providers.Web3Provider((window as any).ethereum, 'any');
-    const signer = await provider.getSigner();
-
-    console.log("_________________________________________")
-    console.log("signer")
-    console.log(signer)
-    console.log("_________________________________________")
-    // Initialize wallet user, pass 'prod' instead of 'staging' for mainnet apps
-    const userAlice = await PushAPI.initialize(signer as any, { env: Constants.ENV.STAGING });
-
-    // Send a notification to users of your protocol
-    const apiResponse = await userAlice.channel.send(['0xe1435247B7373dAC9027c4bd3E135e122e6AEB9a'], {
-      channel: 'eip155:11155111:0xdfcef1F63e09642A21bD464Ec1174edD68D326D5',
-      notification: {
-        title: 'Hey! You are eligible for a reward!',
-        body: `${message} 
-Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`,
-      }
-    });
-
-    console.log("apiResponse")
-    console.log(apiResponse)
-
-  }
-
 
   return (
     <ContainerWrapper>
@@ -214,24 +184,22 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                   </>
                 ) : (
                   <>
-                    {apiResponse?.map((item: any) => (
-                      <>
-                        <div className='flex justify-between items-center p-4 border-b border-gray-200'>
-                          <div className='flex items-center justify-between w-full'>
-                            <p className='text-sm font-medium mr-2'>
-                              {item.address}
-                            </p>
-                            <p className='text-sm font-medium flex items-center'>
-                              {(item.amount / 10 ** 18).toFixed(3)} DAI
-                              <img
-                                src='https://s2.coinmarketcap.com/static/img/coins/64x64/4943.png'
-                                alt=''
-                                className='w-4 h-4 ml-1'
-                              />
-                            </p>
-                          </div>
+                    {apiResponse?.map((item: any, index: number) => (
+                      <div key={index} className='flex justify-between items-center p-4 border-b border-gray-200'>
+                        <div className='flex items-center justify-between w-full'>
+                          <p className='text-sm font-medium mr-2'>
+                            {item.address}
+                          </p>
+                          <p className='text-sm font-medium flex items-center'>
+                            {(item.amount / 10 ** 18).toFixed(3)} DAI
+                            <img
+                              src='https://s2.coinmarketcap.com/static/img/coins/64x64/4943.png'
+                              alt=''
+                              className='w-4 h-4 ml-1'
+                            />
+                          </p>
                         </div>
-                      </>
+                      </div>
                     ))}
                     <div className='text-center py-1 text-sm'>
                       {walletAddressToFilter.length ?? 50} More records
@@ -289,12 +257,10 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     Campaign Name{' '}
                   </label>
 
-                  <TextField.Input size="3" placeholder=""
+                  <TextField.Input size="3" placeholder="e.g. DAI Holder Rewards"
                     value={campaignName}
                     onChange={(e) => setCampaignName(e.target.value)}
                   />
-
-
                 </div>
 
                 <div className='pt-4'>
@@ -302,7 +268,6 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     htmlFor=''
                     className='mb-2 block text-black font-medium'
                   >
-
                     Verification Method
                   </label>
                   <div className='w-full'>
@@ -325,10 +290,24 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     How to Contact{' '}
                   </label>
                   <div className='w-full flex items-center'>
-                    <div className={`p-3 border rounded-lg mr-2 cursor-pointer ${mesageProvider == "push" ? "border-2 border-[#978365]" : ''}`} onClick={() => setMessageProvider('push')}>Push Protocol </div>
-                    <div className={`p-3 border rounded-lg mr-2 cursor-pointer ${mesageProvider == "xmtp" ? "border-2 border-[#978365]" : ''}`} onClick={() => setMessageProvider('xmtp')}>XMTP</div>
+                    <div 
+                      className='p-3 border rounded-lg mr-2 opacity-50 cursor-not-allowed'
+                      title="Push Protocol temporarily disabled due to compatibility issues"
+                    >
+                      Push Protocol (Disabled)
+                    </div>
+                    <div 
+                      className={`p-3 border rounded-lg mr-2 cursor-pointer ${mesageProvider == "xmtp" ? "border-2 border-[#978365]" : ''}`} 
+                      onClick={() => setMessageProvider('xmtp')}
+                    >
+                      XMTP
+                    </div>
                   </div>
+                  <p className='text-xs text-gray-500 mt-2'>
+                    Note: Push Protocol is temporarily disabled. XMTP will be used for notifications.
+                  </p>
                 </div>
+
                 <div className='pt-4'>
                   <label
                     htmlFor=''
@@ -338,15 +317,13 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                   </label>
                   <div className='w-full'>
                     <TextArea
+                      placeholder="Enter your campaign message..."
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       required
                     />
                   </div>
                 </div>
-
-
-
 
                 <div className='pt-4'>
                   <label
@@ -356,14 +333,14 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     Network{' '}
                   </label>
                   <div className='w-52'>
-                    <Select.Root size={'3'} defaultValue='polygon'>
+                    <Select.Root size={'3'} defaultValue='bnbTestnet'>
                       <Select.Trigger className='select_input' />
                       <Select.Content>
                         <Select.Group>
                           <Select.Item value='polygon'>Polygon</Select.Item>
                           <Select.Item value='sepolia'>Sepolia</Select.Item>
                           <Select.Item value='celo'>Celo</Select.Item>
-                          <Select.Item value='xdc'>xDC</Select.Item>
+                          <Select.Item value='bnbTestnet'>bnbTestnet</Select.Item>
                           <Select.Item value='arb'>Arbitrum</Select.Item>
                           <Select.Item value='zkevm'>Polygon zkevm</Select.Item>
                           <Select.Item value='mantle'>Mantle</Select.Item>
@@ -374,6 +351,7 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     </Select.Root>
                   </div>
                 </div>
+
                 <div className='pt-4'>
                   <label
                     htmlFor=''
@@ -382,14 +360,17 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     Reward Per Wallet{' '}
                   </label>
                   <div className='w-full'>
-                    <TextField.Input size="3"
+                    <TextField.Input 
+                      size="3"
                       type='number'
+                      placeholder="0.01"
                       value={rewardPerWallet}
                       onChange={(e) => setRewardPerWallet(e.target.value)}
                       required
                     />
                   </div>
                 </div>
+
                 <div className='pt-4'>
                   <label
                     htmlFor=''
@@ -410,7 +391,6 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                   </div>
                 </div>
 
-
                 <div className='pt-4'>
                   <label
                     htmlFor=''
@@ -419,51 +399,51 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     Capacity{' '}
                   </label>
                   <div className='w-full'>
-                    <TextField.Input size="3"
+                    <TextField.Input 
+                      size="3"
                       type='text'
+                      placeholder="100"
                       value={capacity}
                       onChange={(e) => setCapacity(e.target.value)}
                       required
                     />
                   </div>
-                  {capacity && rewardPerWallet ? <>
+                  {capacity && rewardPerWallet ? (
                     <p className='font-semibold text-sm mt-2 text-black'>
-                      Total Reward spent : {Number(capacity ?? 0) * Number(rewardPerWallet ?? 0)} ETH{' '}
+                      Total Reward spent: {Number(capacity ?? 0) * Number(rewardPerWallet ?? 0)} ETH{' '}
                     </p>
-                  </> : null}
+                  ) : null}
                 </div>
 
                 <div className="mt-5">
                   <Text as="label" size="2" className='mt-5'>
                     <Flex gap="2">
-                      <Switch /> Enable Adhar Verification
+                      <Switch /> Enable Aadhaar Verification
                     </Flex>
                   </Text>
                 </div>
               </div>
 
-
               <div className='mt-10 w-full flex justify-between items-center'>
-                {account ? <Button onClick={run}>{loading ? "Loading..." : "Run"}</Button> : <>
-                  <Button onClick={connect}>Connect</Button>
-                </>}
+                {account ? (
+                  <Button onClick={run}>{loading ? "Loading..." : "Create Campaign"}</Button>
+                ) : (
+                  <Button onClick={connect}>Connect Wallet</Button>
+                )}
 
-                {account ?
+                {account ? (
                   <div className="flex items-center space-x-5">
-
                     <p>
                       {account ? <>{shortenAddress(account)}</> : null}
                     </p>
-
                     <a className='cursor-pointer text-gray-500 hover:text-gray-900' onClick={disconnect}>Disconnect</a>
-                  </div> : null
-                }
-              </div>{' '}
+                  </div>
+                ) : null}
+              </div>
             </form>
           </div>
         </CardWrapper>
       </div>
-
     </ContainerWrapper>
   );
 };

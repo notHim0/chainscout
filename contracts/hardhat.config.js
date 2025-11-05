@@ -13,10 +13,10 @@ module.exports = {
       chainId: 5,
       blockConfirmations: 6,
     },
-    mumbai: {
-      url: "https://polygon-mumbai-bor.publicnode.com",
+    bnbTestnet: {
+      url: "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+      chainId: 97,
       accounts: [PRIVATE_KEY],
-      chainId: 80001,
       blockConfirmations: 6,
     },
     scrollSepolia: {

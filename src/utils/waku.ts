@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   DecodedMessage,
@@ -7,27 +7,43 @@ import {
   createEncoder,
   createLightNode,
   waitForRemotePeer,
-} from '@waku/sdk';
-import protobuf from 'protobufjs';
+} from "@waku/sdk";
+import protobuf from "protobufjs";
 
-const contentTopic = '/xyz/0';
+const contentTopic = "/chainscout/1/chat/proto";
 
-export const PChatMessage = new protobuf.Type('ChatMessage')
-  .add(new protobuf.Field('timestamp', 1, 'uint64'))
-  .add(new protobuf.Field('message', 2, 'string'));
+export const PChatMessage = new protobuf.Type("ChatMessage")
+  .add(new protobuf.Field("timestamp", 1, "uint64"))
+  .add(new protobuf.Field("message", 2, "string"));
 
 export interface IChatMessage {
   timestamp: Date;
   message: string;
 }
 
-const encoder = createEncoder({ contentTopic });
+// Use 'as any' to bypass strict type checking temporarily
+const encoder = createEncoder({
+  contentTopic,
+  ephemeral: false,
+} as any);
+
 const decoder = createDecoder(contentTopic);
 
 export const createNode = async () => {
-  const waku = await createLightNode({ defaultBootstrap: true });
-  await waitForRemotePeer(waku);
-  return waku;
+  try {
+    const waku = await createLightNode({
+      defaultBootstrap: true,
+    });
+
+    await waitForRemotePeer(waku, {
+      timeoutMs: 15000,
+    });
+
+    return waku;
+  } catch (error) {
+    console.error("Failed to create Waku node:", error);
+    throw error;
+  }
 };
 
 export const receiveMessages = async (
@@ -36,13 +52,23 @@ export const receiveMessages = async (
 ) => {
   const _callback = (wakuMessage: DecodedMessage): void => {
     if (!wakuMessage.payload) return;
-    const pollMessageObj = PChatMessage.decode(wakuMessage.payload);
-    const pollMessage = pollMessageObj.toJSON() as IChatMessage;
-    callback(pollMessage);
+    try {
+      const pollMessageObj = PChatMessage.decode(wakuMessage.payload);
+      const pollMessage = pollMessageObj.toJSON() as IChatMessage;
+      callback(pollMessage);
+    } catch (error) {
+      console.error("Error decoding message:", error);
+    }
   };
 
-  const unsubscribe = await waku.filter.subscribe([decoder], _callback);
-  return unsubscribe;
+  try {
+    // @ts-ignore - Bypass type checking for decoder
+    const unsubscribe = await waku.filter.subscribe([decoder], _callback);
+    return unsubscribe;
+  } catch (error) {
+    console.error("Error subscribing to messages:", error);
+    throw error;
+  }
 };
 
 export const sendMessages = async (
@@ -54,13 +80,17 @@ export const sendMessages = async (
     message: chatMessage.message,
   });
 
-  // Serialise the message using Protobuf
   const serialisedMessage = PChatMessage.encode(protoMessage).finish();
 
-  // Send the message using Light Push
-  await waku.lightPush.send(encoder, {
-    payload: serialisedMessage,
-  });
+  try {
+    // @ts-ignore
+    await waku.lightPush.send(encoder, {
+      payload: serialisedMessage,
+    });
+  } catch (error) {
+    console.error("Error sending message:", error);
+    throw error;
+  }
 };
 
 export const retrieveExistingMessages = async (
@@ -69,11 +99,20 @@ export const retrieveExistingMessages = async (
 ) => {
   const _callback = (wakuMessage: DecodedMessage): void => {
     if (!wakuMessage.payload) return;
-    const pollMessageObj = PChatMessage.decode(wakuMessage.payload);
-    const pollMessage = pollMessageObj.toJSON() as IChatMessage;
-    callback(pollMessage);
+    try {
+      const pollMessageObj = PChatMessage.decode(wakuMessage.payload);
+      const pollMessage = pollMessageObj.toJSON() as IChatMessage;
+      callback(pollMessage);
+    } catch (error) {
+      console.error("Error decoding stored message:", error);
+    }
   };
 
-  // Query the Store peer
-  await waku.store.queryWithOrderedCallback([decoder], _callback);
+  try {
+    // @ts-ignore
+    await waku.store.queryWithOrderedCallback([decoder], _callback);
+  } catch (error) {
+    console.error("Error retrieving existing messages:", error);
+    throw error;
+  }
 };

@@ -3,7 +3,6 @@ import CardWrapper from '@/components/UI/CardWrapper';
 import ContainerWrapper from '@/components/UI/ContainerWrapper';
 import { sendMessages } from '@/utils/waku';
 import { MagicWandIcon } from '@radix-ui/react-icons';
-import { useAnonAadhaar } from 'anon-aadhaar-react';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import useWindowSize from 'react-use/lib/useWindowSize';
@@ -30,22 +29,19 @@ const ClaimPage = ({ node }: any) => {
     const [loading, setLoading] = useState(false);
     const [allowed, setAllowedStatus] = useState(false);
     const [rewardClaimed, setRewardClaimed] = useState(false);
-    const [anonAadhaar] = useAnonAadhaar();
     const { width, height } = useWindowSize();
     const { connect, disconnect, account, connected, provider, chainId } =
         useMetamask();
     const [gas, setGas] = useState(null);
 
     useEffect(() => {
-
-        console.log('Anon Aadhaar status: ', anonAadhaar.status);
         (async function call() {
             const response = await fetch('/api/integration/gas');
             const data = await response.json();
             setGas(data);
             console.log(gas)
         })();
-    }, [anonAadhaar]);
+    }, []);
 
     async function sendWakuMessage() {
         console.log('calling sendMessage');
