@@ -3,6 +3,7 @@ import { MetaMaskProvider } from "@metamask/sdk-react";
 import { Theme } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
 import type { AppProps } from "next/app";
+import { Toaster } from "react-hot-toast";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
@@ -14,6 +15,7 @@ export default function App({ Component, pageProps }: AppProps) {
     >
       <div className="bg-[#faf8f3] text-[#646464]">
         <div className="mx-auto max-w-screen-xl px-1 md:px-4 sm:px-6 relative">
+          <Toaster/>
           <MetaMaskProvider
             debug={false}
             sdkOptions={{

@@ -8,7 +8,8 @@ const useMetamask = () => {
     const connect = async () => {
         try {
             const accounts = await sdk?.connect();
-            setAccount((accounts as any)?.[0]);
+            setAccount((accounts as any)?.[0
+            ]);
             console.log('here')
         } catch (err) {
             console.warn(`failed to connect..`, err);
@@ -20,7 +21,7 @@ const useMetamask = () => {
         try {
             setAccount('');
             await sdk?.disconnect();
-            // setAccount((accounts as any)?.[0]);
+            // setAccount((accounts as any)?.[0]);\
             console.log('disconnected')
         } catch (err) {
             console.warn(`failed to connect..`, err);

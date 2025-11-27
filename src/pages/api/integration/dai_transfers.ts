@@ -3,7 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 
 const DaiTranfers = async (req: NextApiRequest, res: NextApiResponse) => {
   init(process.env.AIRSTACK_API_KEY!);
-
+  console.log(process.env.AIRSTACK_API_KEY)
   const addressesFound = [];
 
   const variables = {};

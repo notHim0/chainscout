@@ -10,7 +10,7 @@ import { ethers } from 'ethers';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 const PageLayout = dynamic(
   () => import('@/components/UI/PageLayout'), {
@@ -18,7 +18,7 @@ const PageLayout = dynamic(
 }
 )
 
-const Create = () => {
+const Create = () => {  
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const [campaignName, setCampaignName] = useState('');
@@ -43,63 +43,121 @@ const Create = () => {
     chainId
   } = useMetamask();
 
-  const run = async () => {
-    setLoading(true);
-    try {
-      // Always use XMTP (Push Protocol temporarily disabled due to compatibility issues)
-      console.log('Sending notifications via XMTP...');
-      await sendXMTPMessage();
+//   const run = async () => {
+//     setLoading(true);
+//     try {
+//       // Always use XMTP (Push Protocol temporarily disabled due to compatibility issues)
+//       console.log('Sending notifications via XMTP...');
+//       // await sendXMTPMessage();
 
-      toast('Campaign created successfully! Ads sent out to the audience.');
+//       toast('Campaign created successfully! Ads sent out to the audience.');
 
-      const chainId = 11155111
-      const provider = new ethers.WebSocketProvider((window as any).ethereum, 'any');
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(allChainAddress, abi, signer)
-      const value = Number(capacity) * Number(rewardPerWallet)
+//       if (!(window as any).ethereum) {
+//         console.error("MetaMask is not installed!");
+//         return;
+// }
+
+//       const chainId = 11155111
+//       const provider = new ethers.BrowserProvider((window as any).ethereum);
+//       const signer = await provider.getSigner();
+//       const contract = new ethers.Contract(allChainAddress, abi, signer)
+//       const value = Number(capacity) * Number(rewardPerWallet)
       
-      const create = await contract.createAirdrop(
-        campaignName,
-        // number of people who can get
-        capacity,
-        // total amount of tokens
-        value,
-        // anonaadhar?
-        true,
-        // verification
-        "1inch_verification",
-        {
-          value: ethers.parseEther(value.toString())
-        }
-      )
-      console.log(create)
+//       const create = await contract.createAirdrop(
+//         campaignName,
+//         // number of people who can get
+//         capacity,
+//         // total amount of tokens
+//         value,
+//         // anonaadhar?
+//         false,
+//         // verification
+//         "",
+        
+//       )
+//       console.log(create)
+//       console.log("Transaction sent...", create);
+//       await create.wait();
+//       console.log("Transaction mined!");
+//       router.push('/dashboard/1')
+//     }
+//     catch (err) {
+//       console.error("__________&&&&&&&&***___")
+//       console.error(err)
+//       console.error("__________&&&&&&&&***___")
+//       toast.error('Failed to create campaign. Please check console for details.')
+//     }
+//     setLoading(false);
+//   }
+const run = async () => {
+// ... inside your 'Create Campaign' function ...
+try {
+  setLoading(true)
+  // --- 1. Get the Signer (from our previous fix) ---
 
-      router.push('/dashboard/1')
-    }
-    catch (err) {
-      console.error("__________&&&&&&&&***___")
-      console.error(err)
-      console.error("__________&&&&&&&&***___")
-      toast.error('Failed to create campaign. Please check console for details.')
-    }
-    setLoading(false);
+  toast.success('Campaign created successfully! Ads sent out to the audience.');
+  if (!(window as any).ethereum) {
+    console.error("MetaMask is not installed!");
+    toast.error("MetaMask is not installed!")
+    return;
   }
 
-  useEffect(() => {
-    (async function handler() {
-      setDataLoading(true);
-      const response = await fetch('/api/integration/dai_transfers');
-      const data = await response.json();
-      setApiResponse(data.filtered_address);
-      const walletList = data.filtered_address?.map(
-        (item: any) => item.address
-      );
-      setWalletAddressToFilter(walletList);
-      setDataLoading(false);
-    })();
-  }, []);
+  const provider = new ethers.BrowserProvider((window as any).ethereum);
+  const signer = await provider.getSigner();
 
-  const sendXMTPMessage = async () => {
+  const usersAllowedString = capacity; 
+  const amountPerUserString = rewardPerWallet; 
+
+  const totalEthValue = parseFloat(usersAllowedString) * parseFloat(amountPerUserString);
+  
+  const totalValueInWei = ethers.parseEther(totalEthValue.toString());
+
+  const amountPerUserInWei = ethers.parseEther(amountPerUserString);
+
+  const contract = new ethers.Contract(allChainAddress, abi, signer);
+
+  console.log("Sending transaction to contract...");
+
+  const tx = await contract.createAirdrop(
+    campaignName,                // 1. The campaign name (string)
+    usersAllowedString,  // 2. Total allowed users (string or number)
+    amountPerUserInWei,  // 3. Reward per user (in Wei)
+    false,               // 4. anonAEnabled (bool, hardcoded)
+    "",                  // 5. verification (string, hardcoded)
+    
+  );
+
+  toast.success("Transaction is being created....")
+  console.log("Transaction sent, waiting for mining...", tx.hash);
+  await tx.wait();
+  console.log("Transaction mined! Campaign created.");
+  await sendXMTPMessage(`Your campaign "${campaignName}" was created successfully!`);
+
+
+} catch (error) {
+  toast.error('Campaign not created due to insufficient funds');
+  await sendXMTPMessage(`Your campaign "${campaignName}" FAILED to create. Error: ${error}`);
+  console.error("Failed to create campaign:", error);
+  
+  setLoading(false)
+}
+}
+
+  // useEffect(() => {
+  //   (async function handler() {
+  //     setDataLoading(true);
+  //     const response = await fetch('/api/integration/dai_transfers');
+  //     const data = await response.json();
+  //     setApiResponse(data.filtered_address);
+  //     const walletList = data.filtered_address?.map(
+  //       (item: any) => item.address
+  //     );
+  //     setWalletAddressToFilter(walletList);
+  //     setDataLoading(false);
+  //   })();
+  // }, []);
+
+  const sendXMTPMessage = async (messageBody: string) => {
     try {
       const response = await fetch('/api/integration/xmtp', {
         method: 'POST',
@@ -107,18 +165,15 @@ const Create = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          wallet_address: [
-            '0xCbE80A330F5221ac28392933BdeE65f1F2dAb834',
-            '0x568b9bFfF4a3a7C7351db84EC2F4Ad4CA147A1D0',
-            '0xf1996154C34e3dc77b26437a102231785e9aD7fE'
-          ],
-          message: `${message} 
-Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`,
+          wallet_address: 
+            "0x9c06af8d5e03e6b9134b9150b6b0e05fb5367e9f",
+           // Still using hardcoded addresses for testing
+          message: messageBody, // Use the message we pass in
         }),
       });
-      
+      console.log(response.status)
       if (response.ok) {
-        console.log('XMTP messages sent successfully');
+        console.log('XMTP message sent successfully');
       } else {
         console.error('XMTP message sending failed');
       }
@@ -127,7 +182,36 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
       console.error('XMTP Error:', e)
       toast.error('Failed to send XMTP messages')
     }
-  }
+}
+//   const sendXMTPMessage = async () => {
+//     try {
+//       const response = await fetch('/api/integration/xmtp', {
+//         method: 'POST',
+//         headers: {
+//           'Content-Type': 'application/json',
+//         },
+//         body: JSON.stringify({
+//           wallet_address: [
+//             "0x9c06af8d5e03e6b9134b9150b6b0e05fb5367e9f",
+//             '0x568b9bFfF4a3a7C7351db84EC2F4Ad4CA147A1D0',
+//             '0xf1996154C34e3dc77b26437a102231785e9aD7fE'
+//           ],
+//           message: `${message} 
+// Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`,
+//         }),
+//       });
+      
+//       if (response.ok) {
+//         console.log('XMTP messages sent successfully');
+//       } else {
+//         console.error('XMTP message sending failed');
+//       }
+//     }
+//     catch (e) {
+//       console.error('XMTP Error:', e)
+//       toast.error('Failed to send XMTP messages')
+//     }
+//   }
 
   return (
     <ContainerWrapper>
@@ -333,7 +417,7 @@ Claim Reward: ${'https://chainscout.xyz/claim?campaign_id=hfweihiuh43yeoihoif'}`
                     Network{' '}
                   </label>
                   <div className='w-52'>
-                    <Select.Root size={'3'} defaultValue='bnbTestnet'>
+                    <Select.Root size={'3'} defaultValue='bnbTestnetnpm ru'>
                       <Select.Trigger className='select_input' />
                       <Select.Content>
                         <Select.Group>
