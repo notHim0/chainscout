@@ -1,63 +1,99 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { Client, Signer, IdentifierKind } from '@xmtp/node-sdk';
-import { ethers } from 'ethers'; // Make sure to import ethers
+import type { NextApiRequest, NextApiResponse } from "next";
+import { Client, Signer } from "@xmtp/node-sdk";
+import { privateKeyToAccount } from "viem/accounts";
+import { hexToBytes } from "viem";
+import { receiveMessageOnPort } from "worker_threads";
 
-const XMTPSendMessage = async (req: NextApiRequest, res: NextApiResponse) => {
+// Import the types if available, otherwise we'll define them
+const enum IdentifierKind {
+	Ethereum = 0,
+	Passkey = 1,
+}
+interface Identifier {
+	identifier: string;
+	identifierKind: IdentifierKind;
+}
+export default async function handler(
+	req: NextApiRequest,
+	res: NextApiResponse
+) {
+	if (req.method !== "POST") {
+		return res.status(405).json({ message: "Method not allowed" });
+	}
 
-    const { wallet_address, message } = req.body;
+	const { message, recipient } = req.body;
+	const privateKey = process.env.PRIVATE_KEY;
 
-    if (!process.env.PRIVATE_KEY) {
-        console.error("PRIVATE_KEY for XMTP bot is not set in .env.local");
-        return res.status(500).json({ error: 'Server configuration error' });
-    }
+	if (!privateKey) {
+		return res
+			.status(500)
+			.json({ message: "Server misconfiguration: No Private Key" });
+	}
 
-    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY);
+	try {
+		console.log("Creating XMTP signer...");
 
-    // This is the V3-compatible Signer object with all type errors fixed
-    const xmtpSigner: Signer = {
-        type: 'EOA',
-        getIdentifier: () => ({
-            identifier: wallet.address,
-            // FIX 1: Changed from .ETHEREUM to .Ethereum (PascalCase)
-            identifierKind: IdentifierKind.Ethereum,
-        }),
-        // FIX 2: This function now correctly returns a Promise<Uint8Array>
-        signMessage: async (message: string): Promise<Uint8Array> => {
-            const signature = await wallet.signMessage(message);
-            // Convert the hex string signature into a Uint8Array
-            // This line fixes the "string is not assignable to Uint8Array" error
-            return ethers.getBytes(signature);
-        },
-    };
+		// Ensure private key has 0x prefix
+		const key = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
 
-    console.log("Initializing XMTP V3 client on 'dev' network...");
+		// Create viem account
+		const account = privateKeyToAccount(key as `0x${string}`);
 
-    try {
-        const xmtp = await Client.create(xmtpSigner, { env: 'dev' });
-        console.log("XMTP client initialized.");
+		// Create the signer object following XMTP docs
+		const signer: Signer = {
+			type: "EOA",
+			getIdentifier: () => ({
+				identifier: account.address,
+				identifierKind: IdentifierKind.Ethereum as any,
+			}),
+			signMessage: async (message: string): Promise<Uint8Array> => {
+				// Sign the message using viem account
+				const signatureHex = await account.signMessage({
+					message,
+				});
+				// Convert hex signature to Uint8Array and return it
+				return hexToBytes(signatureHex);
+			},
+		};
 
-        for (const walletAddress of wallet_address) {
-            
-            const canMessage = await xmtp.canMessage(walletAddress);
-            
-            if (canMessage) {
-                const conversation = await xmtp.conversations.newDm(
-                    walletAddress
-                );
-                await conversation.send(message);
-                console.log(`Message sent to ${walletAddress}`);
-            } else {
-                console.warn(`Cannot message ${walletAddress}: User is not on the XMTP network.`);
-            }
-        }
+		console.log("Creating XMTP client...");
 
-        console.log("XMTP job complete.");
-        return res.status(200).json({ status: 'okay' });
+		// Create XMTP client with the properly formatted signer
+		const client = await Client.create(signer, {
+			env: "dev",
+		});
 
-    } catch (e: any) {
-        console.error("Error in XMTP V3 client:", e);
-        return res.status(500).json({ error: e.message || 'Failed to send XMTP messages' });
-    }
-};
+		console.log("Client created successfully");
+		console.log("Checking if recipient can receive messages...");
 
-export default XMTPSendMessage;
+		console.log("started to create the message, receipeint: ", recipient);
+		const recipientObj: Identifier = {
+			identifier: recipient,
+			identifierKind: IdentifierKind.Ethereum,
+		};
+		// const canMessage = await client.canMessage([recipientObj] as any);
+		// console.log("successfully created the message");
+		const recipientLower = recipient.toLowerCase();
+
+		// if (!canMessage.get(recipientLower)) {
+		// 	return res
+		// 		.status(404)
+		// 		.json({ message: "Recipient is not active on XMTP V3 network." });
+		// }
+
+		console.log(`Creating V3 conversation with ${recipient}...`);
+
+		const conversation = await client.conversations.newGroup([recipient]);
+		await conversation.send(
+			`${message}\n go to: http://localhost:3000/claim to claim your reward`
+		);
+
+		console.log(`✅ Sent XMTP V3 message to ${recipient}`);
+		return res.status(200).json({ success: true });
+	} catch (error: any) {
+		console.error("XMTP API Error:", error);
+		return res.status(500).json({
+			message: `${message}\n go to: http://localhost:3000/claim to claim your reward`,
+		});
+	}
+}
